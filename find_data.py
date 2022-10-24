@@ -52,19 +52,31 @@ def find_road(departure: str, target: str, start_datetime: str):
 
     depart_found = False
     target_found = False
-    
+    result_text = ''
     for l in r['CZPTTCISMessage']['CZPTTInformation']['CZPTTLocation']:
         if 'TrainActivity' in l:
             if not depart_found and departure == l['Location']['PrimaryLocationName']:
                 depart_found = True
-                print('######################################################')
-                print(r['CZPTTCISMessage']['Identifiers']['PlannedTransportIdentifiers'][0]['Core'])
-                print('######################################################')
+                result_text +='######################################################\n'
+                result_text +=r['CZPTTCISMessage']['Identifiers']['PlannedTransportIdentifiers'][0]['Core']+"\n"
+                result_text +='######################################################\n'
             
             if target == l['Location']['PrimaryLocationName']:
                 target_found = True
                 if target_found and not depart_found:
                     break
+
+                found = False
+                if type(l['TrainActivity']) is dict:
+                    if l['TrainActivity']['TrainActivityType'] == "0001":
+                        found = True
+                else:
+                    for i in l['TrainActivity']:
+                        if i['TrainActivityType'] == "0001":
+                            found = True
+                if not found:
+                    break
+
             if depart_found:
                 # stanice kde je prichod aj odchod
                 if type(l['TimingAtLocation']['Timing']) is list:
@@ -74,11 +86,12 @@ def find_road(departure: str, target: str, start_datetime: str):
 
                 if type(l['TrainActivity']) is dict:
                     if l['TrainActivity']['TrainActivityType'] == "0001":
-                        print(l['Location']['PrimaryLocationName'] + ' -- ' + depart_time[:8])
+                        result_text += l['Location']['PrimaryLocationName'] 
                 else:
                     for i in l['TrainActivity']:
                         if i['TrainActivityType'] == "0001":
-                            print(l['Location']['PrimaryLocationName'] + ' -- ' + depart_time[:8] )
-                            
+                            result_text +=l['Location']['PrimaryLocationName'] 
+                result_text += ' -- ' + depart_time[:8] + '\n'
                 if target_found and depart_found:
+                    print(result_text)
                     break
