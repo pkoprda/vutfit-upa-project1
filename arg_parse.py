@@ -28,13 +28,13 @@ def parse_arguments():
         "--to", metavar="STATION", dest="destination", help="Destination station"
     )
     parser.add_argument(
-        "--date",
+        "-D", "--date",
         metavar="DATE",
         dest="start_date",
         help="Show timetables after this date\nDATE must be in format YYYY-MM-DD",
     )
     parser.add_argument(
-        "--time",
+        "-T", "--time",
         metavar="TIME",
         dest="start_time",
         default="00:00:00",

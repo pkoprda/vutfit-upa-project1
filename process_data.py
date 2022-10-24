@@ -84,6 +84,17 @@ def save_fixes_to_db(data_path: str = "data/2022-06"):
         xml_dir = (Path(fix_path).parts)[1]
         xml_id = xml_filename + "_" + xml_dir
 
+        # # # found = coll.find_one({"_id": xml_id}) # Dont insert already present entries
+        # # # if found:
+        # # #     continue
+
+        # # # try:
+        # # #     fix_archive = gzip.GzipFile(fix_path, "r")
+        # # #     fix_file = fix_archive.read()
+        # # # except gzip.BadGzipFile:
+        # # #     fix_archive = zipfile.ZipFile(fix_path, "r")
+        # # #     fix_file = fix_archive.read(fix_archive.namelist()[0])
+
         # found = coll.find_one({"_id": xml_id})
         # if found:
         #     continue
