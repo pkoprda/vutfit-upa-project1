@@ -17,18 +17,11 @@ def main():
     if args.save:
         save_data_to_db(dont_save_fixes=args.dont_save_fixes)
 
-    if args.start_date and args.start_time and args.end_date and args.end_time:
-        if (
-            not valid_date(args.start_date)
-            or not valid_time(args.start_time)
-            or not valid_date(args.end_date)
-            or not valid_time(args.end_time)
-        ):
+    if args.start_date:
+        if (not valid_date(args.start_date) or not valid_time(args.start_time)):
             return
 
-        start_datetime, end_datetime = modify_datetime(
-            args.start_date, args.start_time, args.end_date, args.end_time
-        )
+        start_datetime = modify_datetime(args.start_date, args.start_time)
 
     if bool(args.departure) ^ bool(args.destination):  # xor
         print("Both departure and destination stations are needed as an input")

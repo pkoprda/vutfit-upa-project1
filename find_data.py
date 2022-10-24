@@ -9,8 +9,7 @@ def find_road(departure: str, target: str, start_datetime: str):
     db = get_db()
     coll = get_collection(db)
 
-    start_date = start_datetime.split("T")[0]
-    start_time = start_datetime.split("T")[1]
+    start_date, start_time = start_datetime.split("T")
     res = coll.aggregate(
         [
             {
@@ -79,10 +78,7 @@ def find_road(departure: str, target: str, start_datetime: str):
                         "######################################################\n"
                     )
                     result_text += (
-                        r["CZPTTCISMessage"]["Identifiers"][
-                            "PlannedTransportIdentifiers"
-                        ][0]["Core"]
-                        + "\n"
+                        "\t\tNový vlakový spoj \n"
                     )
                     result_text += (
                         "######################################################\n"
@@ -113,12 +109,11 @@ def find_road(departure: str, target: str, start_datetime: str):
 
                     if isinstance(l["TrainActivity"]) is dict:
                         if l["TrainActivity"]["TrainActivityType"] == "0001":
-                            result_text += l["Location"]["PrimaryLocationName"]
+                            result_text += l["Location"]["PrimaryLocationName"] + ' -- ' + depart_time[:8] + '\n'
                     else:
                         for i in l["TrainActivity"]:
                             if i["TrainActivityType"] == "0001":
-                                result_text += l["Location"]["PrimaryLocationName"]
-                    result_text += " -- " + depart_time[:8] + "\n"
+                                result_text += l["Location"]["PrimaryLocationName"] + ' -- ' + depart_time[:8] + '\n'
                     if target_found and depart_found:
                         print(result_text)
                         break

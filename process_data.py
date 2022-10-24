@@ -8,12 +8,14 @@ from tqdm import tqdm
 from pymongo import MongoClient
 from pymongo.database import Database
 from pymongo.collection import Collection
+from pymongo.collation import Collation
 
 
 MONGO_HOST = "localhost"
 MONGO_PORT = 27017
 MONGO_USER = "demo"
 MONGO_PASS = "demo"
+
 MONGO_DB = "messages"
 MONGO_COLL = "message_items"
 MONGO_COLL_FIXES = "message_item_fixes"
@@ -35,6 +37,25 @@ def drop_coll(c: str):
     db = get_db()
     coll = get_collection(db, c)
     coll.drop()
+
+
+def prepare_data():
+    db = get_db()
+    coll_1 = get_collection(db, MONGO_COLL)
+    #coll_2 = get_collection(db, MONGO_COLL_FIXES)
+
+    try:
+        coll_1.drop_index("PrimaryLocationName_1")
+    except:
+        pass
+    coll_1.create_index("PrimaryLocationName")
+
+    #CZForeignDestinationLocation
+
+    #coll_1.create_index("PrimaryLocationName", collation=Collation(locale="cs"))
+
+    for i in coll_1.list_indexes():
+        print(i)
 
 
 def save_fixes_to_db(data_path: str = "data"):
@@ -101,3 +122,7 @@ def save_data_to_db(src_path: str = "data/GVD2022.zip", dont_save_fixes: bool = 
     # Save the fix data
     if not dont_save_fixes:
         save_fixes_to_db()
+
+
+if __name__ == "__main__":
+    prepare_data()

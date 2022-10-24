@@ -28,29 +28,17 @@ def parse_arguments():
         "--to", metavar="STATION", dest="destination", help="Destination station"
     )
     parser.add_argument(
-        "--start-date",
+        "--date",
         metavar="DATE",
         dest="start_date",
         help="Show timetables after this date\nDATE must be in format YYYY-MM-DD",
     )
     parser.add_argument(
-        "--start-time",
+        "--time",
         metavar="TIME",
         dest="start_time",
         default="00:00:00",
         help="Show timetables after this time\nTIME must be in format hh:mm:dd (default: %(default)s)",
-    )
-    parser.add_argument(
-        "--end-date",
-        metavar="DATE",
-        dest="end_date",
-        help="Show before this date\nDATE must be in format YYYY-MM-DD",
-    )
-    parser.add_argument(
-        "--end-time",
-        metavar="TIME",
-        dest="end_time",
-        help="Show before this time\nTIME must be in format hh:mm:dd",
     )
     return parser.parse_args()
 
@@ -73,5 +61,5 @@ def valid_time(time_text: str):
         return False
 
 
-def modify_datetime(start_date: str, start_time: str, end_date: str, end_time: str):
-    return start_date + "T" + start_time, end_date + "T" + end_time
+def modify_datetime(start_date: str, start_time: str):
+    return start_date + "T" + start_time
