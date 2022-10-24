@@ -94,7 +94,7 @@ def find_road(departure: str, target: str, start_datetime: str):
                         break
 
                     found = False
-                    if type(l["TrainActivity"]) is dict:
+                    if isinstance(l["TrainActivity"]) is dict:
                         if l["TrainActivity"]["TrainActivityType"] == "0001":
                             found = True
                     else:
@@ -106,12 +106,12 @@ def find_road(departure: str, target: str, start_datetime: str):
 
                 if depart_found:
                     # stanice kde je prichod aj odchod
-                    if type(l["TimingAtLocation"]["Timing"]) is list:
+                    if isinstance(l["TimingAtLocation"]["Timing"]) is list:
                         depart_time = l["TimingAtLocation"]["Timing"][1]["Time"]
                     else:  # startovacia a cielova stanica
                         depart_time = l["TimingAtLocation"]["Timing"]["Time"]
 
-                    if type(l["TrainActivity"]) is dict:
+                    if isinstance(l["TrainActivity"]) is dict:
                         if l["TrainActivity"]["TrainActivityType"] == "0001":
                             result_text += l["Location"]["PrimaryLocationName"]
                     else:
