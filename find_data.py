@@ -8,22 +8,19 @@ def find_road(departure: str, target: str, start_datetime: str):
   db = get_db()
   coll = get_collection(db)
 
-  start_date, start_time = start_datetime.split('T')
+  start_date = start_datetime.split('T')[0]
+  start_time = start_datetime.split('T')[1]
   res = coll.aggregate([{
         '$match': {
             'CZPTTCISMessage.CZPTTInformation.PlannedCalendar.ValidityPeriod.StartDateTime': {
-                '$lte': start_date
+                '$lte': start_datetime
             }
         }
     }, {
         '$match': {
             'CZPTTCISMessage.CZPTTInformation.PlannedCalendar.ValidityPeriod.EndDateTime': {
-                '$gte': start_date
+                '$gte': start_datetime
             }
-        }
-    },{
-        '$project': {
-            'CZPTTCISMessage.CZPTTInformation': 1
         }
     }, {
     '$match': {
@@ -43,8 +40,6 @@ def find_road(departure: str, target: str, start_datetime: str):
   ])
   
   for r in res:
-    if r['_id'] != 5511:
-        continue
     validity_start = r['CZPTTCISMessage']['CZPTTInformation']['PlannedCalendar']['ValidityPeriod']['StartDateTime'][:10]
     validity_start = datetime.strptime(validity_start, "%Y-%m-%d")
     
@@ -54,22 +49,36 @@ def find_road(departure: str, target: str, start_datetime: str):
     
     if r['CZPTTCISMessage']['CZPTTInformation']['PlannedCalendar']['BitmapDays'][delta.days] == '0':
         continue
-    print('######################################################')
-    print(r['CZPTTCISMessage']['Identifiers']['PlannedTransportIdentifiers'][0]['Core'])
-    print('######################################################')
+
+    depart_found = False
+    target_found = False
+    
     for l in r['CZPTTCISMessage']['CZPTTInformation']['CZPTTLocation']:
         if 'TrainActivity' in l:
+            if not depart_found and departure == l['Location']['PrimaryLocationName']:
+                depart_found = True
+                print('######################################################')
+                print(r['CZPTTCISMessage']['Identifiers']['PlannedTransportIdentifiers'][0]['Core'])
+                print('######################################################')
+            
+            if target == l['Location']['PrimaryLocationName']:
+                target_found = True
+                if target_found and not depart_found:
+                    break
+            if depart_found:
+                # stanice kde je prichod aj odchod
+                if type(l['TimingAtLocation']['Timing']) is list:
+                    depart_time = l['TimingAtLocation']['Timing'][1]['Time']
+                else:# startovacia a cielova stanica
+                    depart_time = l['TimingAtLocation']['Timing']['Time']
 
-            # stanice kde je prichod aj odchod
-            if type(l['TimingAtLocation']['Timing']) is list:
-                depart_time = l['TimingAtLocation']['Timing'][1]['Time']
-            else:# startovacia a cielova stanica
-                depart_time = l['TimingAtLocation']['Timing']['Time']
-
-            if type(l['TrainActivity']) is dict:
-                if l['TrainActivity']['TrainActivityType'] == "0001":
-                    print(l['Location']['PrimaryLocationName'] + ' -- ' + depart_time[:8])
-            else:
-                for i in l['TrainActivity']:
-                    if i['TrainActivityType'] == "0001":
-                        print(l['Location']['PrimaryLocationName'] + ' -- ' + depart_time[:8] )
+                if type(l['TrainActivity']) is dict:
+                    if l['TrainActivity']['TrainActivityType'] == "0001":
+                        print(l['Location']['PrimaryLocationName'] + ' -- ' + depart_time[:8])
+                else:
+                    for i in l['TrainActivity']:
+                        if i['TrainActivityType'] == "0001":
+                            print(l['Location']['PrimaryLocationName'] + ' -- ' + depart_time[:8] )
+                            
+                if target_found and depart_found:
+                    break
