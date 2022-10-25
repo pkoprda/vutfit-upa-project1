@@ -29,7 +29,7 @@ def main():
         return
 
     if args.departure and args.destination:
-        find_road(args.departure, args.destination, start_datetime)
+        find_road2(args.departure, args.destination, start_datetime)
 
 
 if __name__ == "__main__":

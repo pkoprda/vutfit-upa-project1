@@ -1,5 +1,6 @@
 from process_data import get_db, get_collection
 from datetime import datetime
+from time import strptime, strftime
 from pprint import pprint
 
 
@@ -136,17 +137,23 @@ def find_road2(departure: str, target: str, start_datetime: str):
     coll = get_collection(db)
 
     start_date, start_time = start_datetime.split("T")
-    res = coll.aggregate([
+    cursor = coll.aggregate([
         {
             "$match": {
+                #"CZPTTCISMessage.CZPTTInformation.CZPTTLocation.Location.PrimaryLocationName": departure,
+                #"CZPTTCISMessage.CZPTTInformation.CZPTTLocation.Location.PrimaryLocationName": target,
+
+                "$and": [ # TODO: Treba skontrolovat
+                    {"CZPTTCISMessage.CZPTTInformation.CZPTTLocation.Location.PrimaryLocationName": departure},
+                    {"CZPTTCISMessage.CZPTTInformation.CZPTTLocation.Location.PrimaryLocationName": target},
+                ],
                 "CZPTTCISMessage.CZPTTInformation.PlannedCalendar.ValidityPeriod.StartDateTime": {
                     "$lte": start_datetime
                 },
                 "CZPTTCISMessage.CZPTTInformation.PlannedCalendar.ValidityPeriod.EndDateTime": {
                     "$gte": start_datetime
                 },
-                "CZPTTCISMessage.CZPTTInformation.CZPTTLocation.Location.PrimaryLocationName": departure,
-                "CZPTTCISMessage.CZPTTInformation.CZPTTLocation.Location.PrimaryLocationName": target,
+                
                 "CZPTTCISMessage.CZPTTInformation.CZPTTLocation.TimingAtLocation.Timing.Time": {
                     "$gte": start_time
                 }
@@ -162,10 +169,62 @@ def find_road2(departure: str, target: str, start_datetime: str):
                 "CZPTTCISMessage.CZPTTInformation.CZPTTLocation.TrainActivity": 1,
             }
         },
+        {
+            "$group": {
+                "_id": "$_id",
+                "locations": {
+                    "$addToSet": {
+                        "names": "$CZPTTCISMessage.CZPTTInformation.CZPTTLocation.Location.PrimaryLocationName",
+                        "times": "$CZPTTCISMessage.CZPTTInformation.CZPTTLocation.TimingAtLocation.Timing.Time"
+                    }
+                },
+            }
+        }
     ])
-    for document in res:
-        pprint(document)
 
-    
-    #print("Date: %s | time: %s | search results:" % (start_date, start_time))
+    i = 0
+    results = []
+
+    for document in cursor:
+        locations = document["locations"][0]
+
+        # Filter out routes with opposite direction
+        if locations["names"].index(departure) > locations["names"].index(target):
+            continue
+
+        station_names = locations["names"]
+        station_times = locations["times"]
+        
+        remaining_stations = station_names[locations["names"].index(departure):]
+        # Throw out arrival times - keep only departure times, flatten list and parse times
+        remaining_times = station_times[locations["names"].index(departure):]
+        remaining_times_fixed = list(
+            map(
+                lambda x: strptime(x, "%H:%M:%S.0000000%z"), 
+                [x[-1] if isinstance(x, list) else x for x in remaining_times]
+            )
+        )
+
+        # Zip stations and departure times together, add them to results
+        results.append(list(zip(remaining_stations, remaining_times_fixed)))
+
+    # Sort results
+    results = sorted(results, key=lambda x: x[1])
+
+    if len(results) == 0:
+        print("Date: %s | time: %s | no results")
+    else:
+        print("Date: %s | time: %s | search results:" % (start_date, start_time))
+
+    # Printing of results
+    for r in results:
+        print_str = ""
+        for i, entry in enumerate(r):
+            station, dep_time = entry
+            print_str += station + " (" + strftime("%H:%M", dep_time) + ")"
+
+            if i < len(r) - 1:
+                print_str += " --> "
+
+        print(print_str)
 
