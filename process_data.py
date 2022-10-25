@@ -1,16 +1,13 @@
 from pathlib import Path
 import zipfile
 import gzip
-
+from datetime import datetime
 import xmltodict
 from tqdm import tqdm
 
 from pymongo import MongoClient
 from pymongo.database import Database
 from pymongo.collection import Collection
-from pymongo.collation import Collation
-
-from datetime import datetime
 
 MONGO_HOST = "localhost"
 MONGO_PORT = 27017
@@ -40,26 +37,39 @@ def drop_coll(c: str):
     coll.drop()
 
 
-def prepare_data():
+def save_fixes_to_db_old(data_path: str = "data/2022-05"):
+    data_folder = Path(data_path)
+    if not data_folder.is_dir():
+        print("Source folder is not present, check the path")
+        return
+
     db = get_db()
-    coll_1 = get_collection(db, MONGO_COLL)
-    #coll_2 = get_collection(db, MONGO_COLL_FIXES)
+    coll = get_collection(db, MONGO_COLL_FIXES)
+    message_dict = {}
 
-    try:
-        coll_1.drop_index("PrimaryLocationName_1")
-    except:
-        pass
-    coll_1.create_index("PrimaryLocationName")
+    data_fixes = list(data_folder.rglob("*.xml.zip"))
 
-    #CZForeignDestinationLocation
+    for fix_path in data_fixes:
+        
+        xml_filename = Path(Path(fix_path).stem).stem
+        xml_dir = (Path(fix_path).parts)[1]
+        xml_id = xml_filename + "_" + xml_dir
+        
+        try:
+            fix_archive = gzip.GzipFile(fix_path, "r")
+            fix_file = fix_archive.read()
+        except gzip.BadGzipFile:
+            fix_archive = zipfile.ZipFile(fix_path, "r")
+            fix_file = fix_archive.read(fix_archive.namelist()[0])
 
-    #coll_1.create_index("PrimaryLocationName", collation=Collation(locale="cs"))
+        found = coll.find_one({"_id": xml_id})
+        if found:
+            continue
 
-    for i in coll_1.list_indexes():
-        print(i)
+        message_dict.update({"_id": xml_id, **xmltodict.parse(fix_file)})
+        coll.insert_one({"_id": xml_id}, message_dict, upsert=True)
 
-
-def save_fixes_to_db(data_path: str = "data/2022-06"):
+def save_fixes_to_db(data_path: str = "data/2022-05"):
     data_folder = Path(data_path)
     if not data_folder.is_dir():
         print("Source folder is not present, check the path")
@@ -71,40 +81,25 @@ def save_fixes_to_db(data_path: str = "data/2022-06"):
     
     message_dict = {}
 
-    data_fixes = list(data_folder.rglob("*.xml"))
-    # data_fixes = reversed(data_fixes)
-    # print(tqdm(
-    #     data_fixes, total=len(data_fixes), desc="Storing fixes to MongoDB"
-    # ))
-    # for fix_path in tqdm(
-    #     data_fixes, total=len(data_fixes), desc="Storing fixes to MongoDB"
-    # ):
-    for fix_path in reversed(data_fixes):
-        xml_filename = Path(fix_path).stem
+    data_fixes = list(data_folder.rglob("*.xml.zip"))
+    d = list(reversed(data_fixes))
+    for fix_path in tqdm(
+        d,
+        total=len(d),
+        desc="Storing fix data to MongoDB",
+      ):
+        
+        xml_filename = Path(Path(fix_path).stem).stem
         xml_dir = (Path(fix_path).parts)[1]
         xml_id = xml_filename + "_" + xml_dir
+        
+        try:
+            fix_archive = gzip.GzipFile(fix_path, "r")
+            fix_file = fix_archive.read()
+        except gzip.BadGzipFile:
+            fix_archive = zipfile.ZipFile(fix_path, "r")
+            fix_file = fix_archive.read(fix_archive.namelist()[0])
 
-        # # # found = coll.find_one({"_id": xml_id}) # Dont insert already present entries
-        # # # if found:
-        # # #     continue
-
-        # # # try:
-        # # #     fix_archive = gzip.GzipFile(fix_path, "r")
-        # # #     fix_file = fix_archive.read()
-        # # # except gzip.BadGzipFile:
-        # # #     fix_archive = zipfile.ZipFile(fix_path, "r")
-        # # #     fix_file = fix_archive.read(fix_archive.namelist()[0])
-
-        # found = coll.find_one({"_id": xml_id})
-        # if found:
-        #     continue
-        # try:
-        # fix_archive = gzip.GzipFile(fix_path, "r")
-        fix_archive =  open(fix_path, "r")
-        fix_file = fix_archive.read()
-        # except gzip.BadGzipFile:
-        #     # fix_archive = zipfile.ZipFile(fix_path, "r")
-        #     fix_file = fix_archive.read(fix_archive.namelist()[0])
         content = xmltodict.parse(fix_file)
         if 'cancel' in xml_filename:
           if type(content['CZCanceledPTTMessage']['PlannedTransportIdentifiers']) is dict:
@@ -126,73 +121,82 @@ def save_fixes_to_db(data_path: str = "data/2022-06"):
               "ValidityPeriod"
               ]["StartDateTime"][:10]
             orig_validity_start = datetime.strptime(orig_validity_start, "%Y-%m-%d")
-            offset = validity_start - validity_start
+            offset = validity_start - orig_validity_start
             fixed_bitmap = content["CZCanceledPTTMessage"]["PlannedCalendar"]['BitmapDays']
             orig_bitmap = list(res["CZPTTCISMessage"]["CZPTTInformation"]["PlannedCalendar"]['BitmapDays'])
 
-            for i in range(offset.days, number_of_days.days+1):
+            list_size = len(orig_bitmap)
+            for i in range(0, number_of_days.days+1):
               if fixed_bitmap[i] == '1':
-                orig_bitmap[i] = '0'
+                # zacina premavat skorej ako nahradeny vlak
+                if (offset.days + i) < 0:
+                  continue
+                # premava aj po obnoveni nahradneho vlaku
+                if (offset.days+ i) >= list_size:
+                  break
+                orig_bitmap[offset.days + i] = '0'
 
             orig_bitmap = "".join(orig_bitmap)
-            print(orig_bitmap)
             res["CZPTTCISMessage"]["CZPTTInformation"]["PlannedCalendar"]['BitmapDays'] = orig_bitmap
-            
+            message_dict = {}
             message_dict.update({"_id": res['_id'], **res})
             coll.update_one({'_id': res['_id']}, {"$set": message_dict}, upsert=True)
-            
+            message_dict = {}
             message_dict.update({"_id": xml_filename, **content})
             coll_fix.replace_one({'_id': xml_filename}, message_dict, upsert=True)
             
             
         else:
-          if type(content['CZPTTCISMessage']['Identifiers']['RelatedPlannedTransportIdentifiers']) is dict:
-            res = coll.find_one({"CZPTTCISMessage.Identifiers.PlannedTransportIdentifiers.Core": content['CZPTTCISMessage']['Identifiers']['RelatedPlannedTransportIdentifiers']['Core']})
-          else:
-            res = coll.find_one({"CZPTTCISMessage.Identifiers.PlannedTransportIdentifiers.Core": content['CZPTTCISMessage']['Identifiers']['RelatedPlannedTransportIdentifiers']['Core']})
+          # "Replacement line" doesn't have to replace anything so we just save it to original collection
+          if 'RelatedPlannedTransportIdentifiers' in content['CZPTTCISMessage']['Identifiers']:
+            if type(content['CZPTTCISMessage']['Identifiers']['RelatedPlannedTransportIdentifiers']) is dict:
+              res = coll.find_one({"CZPTTCISMessage.Identifiers.PlannedTransportIdentifiers.Core": content['CZPTTCISMessage']['Identifiers']['RelatedPlannedTransportIdentifiers']['Core']})
+            else:
+              res = coll.find_one({"CZPTTCISMessage.Identifiers.PlannedTransportIdentifiers.Core": content['CZPTTCISMessage']['Identifiers']['RelatedPlannedTransportIdentifiers']['Core']})
+            
+            if res:
+              validity_start = content["CZPTTCISMessage"]["CZPTTInformation"]["PlannedCalendar"][
+                "ValidityPeriod"
+                ]["StartDateTime"][:10]
+              validity_end = content["CZPTTCISMessage"]["CZPTTInformation"]["PlannedCalendar"][
+                "ValidityPeriod"
+                ]["EndDateTime"][:10]
+              validity_start = datetime.strptime(validity_start, "%Y-%m-%d")
+              validity_end = datetime.strptime(validity_end, "%Y-%m-%d")
+              number_of_days = validity_end - validity_start
+              
+              orig_validity_start = res["CZPTTCISMessage"]["CZPTTInformation"]["PlannedCalendar"][
+                "ValidityPeriod"
+                ]["StartDateTime"][:10]
+              orig_validity_start = datetime.strptime(orig_validity_start, "%Y-%m-%d")
+              offset = validity_start - orig_validity_start
+              
+              fixed_bitmap = content["CZPTTCISMessage"]["CZPTTInformation"]["PlannedCalendar"]['BitmapDays']
+              orig_bitmap = list(res["CZPTTCISMessage"]["CZPTTInformation"]["PlannedCalendar"]['BitmapDays'])
+
+              list_size = len(orig_bitmap)
+              for i in range(0, number_of_days.days+1):
+                if fixed_bitmap[i] == '1':
+                  # zacina premavat skorej ako nahradeny vlak
+                  if (offset.days + i) < 0:
+                    continue
+                  # premava aj po obnoveni nahradneho vlaku
+                  if (offset.days+ i) >= list_size:
+                    break
+                  orig_bitmap[offset.days + i] = '0'
+
+              orig_bitmap = "".join(orig_bitmap)
+              res["CZPTTCISMessage"]["CZPTTInformation"]["PlannedCalendar"]['BitmapDays'] = orig_bitmap
           
-          if res:
-            validity_start = content["CZPTTCISMessage"]["CZPTTInformation"]["PlannedCalendar"][
-              "ValidityPeriod"
-              ]["StartDateTime"][:10]
-            validity_end = content["CZPTTCISMessage"]["CZPTTInformation"]["PlannedCalendar"][
-              "ValidityPeriod"
-              ]["EndDateTime"][:10]
-            validity_start = datetime.strptime(validity_start, "%Y-%m-%d")
-            validity_end = datetime.strptime(validity_end, "%Y-%m-%d")
-            number_of_days = validity_end - validity_start
-            
-            orig_validity_start = res["CZPTTCISMessage"]["CZPTTInformation"]["PlannedCalendar"][
-              "ValidityPeriod"
-              ]["StartDateTime"][:10]
-            orig_validity_start = datetime.strptime(orig_validity_start, "%Y-%m-%d")
-            offset = validity_start - validity_start
-            
-            fixed_bitmap = content["CZPTTCISMessage"]["CZPTTInformation"]["PlannedCalendar"]['BitmapDays']
-            orig_bitmap = list(res["CZPTTCISMessage"]["CZPTTInformation"]["PlannedCalendar"]['BitmapDays'])
+              message_dict = {}
+              message_dict.update({"_id": res['_id'], **res})
+              coll.update_one({'_id': res['_id']}, {"$set": message_dict}, upsert=True)
 
-            for i in range(offset.days, number_of_days.days+1):
-              if fixed_bitmap[i] == '1':
-                orig_bitmap[i] = '0'
-              pass
-            orig_bitmap = "".join(orig_bitmap)
-            res["CZPTTCISMessage"]["CZPTTInformation"]["PlannedCalendar"]['BitmapDays'] = orig_bitmap
-        
 
-            message_dict.update({"_id": res['_id'], **res})
-            coll.update_one({'_id': res['_id']}, {"$set": message_dict}, upsert=True)
-
-            # found = coll.find_one({"_id": xml_filename})
-            # if found:
-            #     continue
-            # message_dict = {}
-            message_dict.update({"_id": xml_filename, **content})
-            coll.replace_one({'_id': xml_filename}, message_dict, upsert=True)
-
+            message_dict = {}
             
-            
-            
-
+            message_dict.update({"_id": xml_id, **content})
+            coll.replace_one({'_id': xml_id}, message_dict, upsert=True)
 
 
 def save_data_to_db(src_path: str = "data/GVD2022.zip", dont_save_fixes: bool = False):
@@ -225,7 +229,3 @@ def save_data_to_db(src_path: str = "data/GVD2022.zip", dont_save_fixes: bool = 
     # Save the fix data
     if not dont_save_fixes:
         save_fixes_to_db()
-
-
-if __name__ == "__main__":
-    prepare_data()

@@ -1,7 +1,7 @@
 from arg_parse import parse_arguments, valid_date, valid_time, modify_datetime
 from download_data import download_page
-from process_data import drop_coll, save_data_to_db, MONGO_COLL, MONGO_COLL_FIXES, save_fixes_to_db
-from find_data import find_road, find_road2
+from process_data import drop_coll, save_data_to_db, MONGO_COLL, MONGO_COLL_FIXES
+from find_data import find_road
 
 
 def main():
@@ -15,8 +15,7 @@ def main():
         download_page()
 
     if args.save:
-        # save_data_to_db(dont_save_fixes=args.dont_save_fixes)
-        save_fixes_to_db()
+        save_data_to_db(dont_save_fixes=args.dont_save_fixes)
 
     if args.start_date:
         if (not valid_date(args.start_date) or not valid_time(args.start_time)):
@@ -29,7 +28,7 @@ def main():
         return
 
     if args.departure and args.destination:
-        find_road2(args.departure, args.destination, start_datetime)
+        find_road(args.departure, args.destination, start_datetime)
 
 
 if __name__ == "__main__":
