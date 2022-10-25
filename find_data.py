@@ -212,19 +212,27 @@ def find_road2(departure: str, target: str, start_datetime: str):
     results = sorted(results, key=lambda x: x[1])
 
     if len(results) == 0:
-        print("Date: %s | time: %s | no results")
+        print(f"Date: {start_date}\nTime: {start_time}\nNo results found")
+        return
     else:
-        print("Date: %s | time: %s | search results:" % (start_date, start_time))
+        print(f"Date: {start_date}\nTime: {start_time}\nSearch results:")
+
+    start_time_ms = datetime.strptime(start_time, "%H:%M:%S").time()
 
     # Printing of results
     for r in results:
         print_str = ""
         for i, entry in enumerate(r):
             station, dep_time = entry
+            train_time_ms = datetime.strptime(strftime('%H:%M:%S', dep_time), "%H:%M:%S").time()
+
+            if start_time_ms > train_time_ms:
+                break
+
             print_str += station + " (" + strftime("%H:%M", dep_time) + ")"
 
             if i < len(r) - 1:
                 print_str += " --> "
 
-        print(print_str)
-
+        if train_time_ms and train_time_ms >= start_time_ms:
+            print(print_str)
